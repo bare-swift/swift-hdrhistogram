@@ -128,3 +128,23 @@ extension HdrHistogram {
         return variance.squareRoot()
     }
 }
+
+extension HdrHistogram {
+    /// Coordinated-omission correction. Per Gil Tene: if a sample at `value`
+    /// arrives at intervals of `expectedInterval` and `value > expectedInterval`,
+    /// record `value` plus synthetic samples for `value - expectedInterval`,
+    /// `value - 2 * expectedInterval`, ... down to (but not below) `expectedInterval`.
+    public mutating func record(
+        corrected value: Int64,
+        expectedInterval: Int64
+    ) throws(HdrHistogramError) {
+        guard expectedInterval > 0 else { throw .invalidExpectedInterval }
+        try record(value)
+        if value <= expectedInterval { return }
+        var missing: Int64 = value - expectedInterval
+        while missing >= expectedInterval {
+            try record(missing)
+            missing -= expectedInterval
+        }
+    }
+}
