@@ -148,3 +148,34 @@ extension HdrHistogram {
         }
     }
 }
+
+extension HdrHistogram {
+    // MARK: - Merge
+
+    /// Add another histogram's counts into self. Both histograms must share
+    /// `(lowestDiscernibleValue, highestTrackableValue, significantValueDigits)`.
+    public mutating func add(_ other: HdrHistogram) throws(HdrHistogramError) {
+        guard self.layout == other.layout else { throw .mergeIncompatible }
+        if other._count == 0 { return }
+        for i in 0..<counts.count {
+            counts[i] &+= other.counts[i]
+        }
+        if _count == 0 {
+            _min = other._min
+            _max = other._max
+        } else {
+            if other._min < _min { _min = other._min }
+            if other._max > _max { _max = other._max }
+        }
+        _count &+= other._count
+    }
+
+    // MARK: - Reset
+
+    public mutating func reset() {
+        for i in 0..<counts.count { counts[i] = 0 }
+        _count = 0
+        _min = 0
+        _max = 0
+    }
+}
