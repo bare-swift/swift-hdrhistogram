@@ -67,3 +67,64 @@ public struct HdrHistogram: Sendable {
         _count &+= count
     }
 }
+
+extension HdrHistogram {
+    // MARK: - Queries
+
+    /// Returns the value at the `percentile`-th percentile (0–100 scale).
+    /// Clamps `percentile` to [0, 100]. Returns 0 for the empty histogram.
+    public func valueAtPercentile(_ percentile: Double) -> Int64 {
+        if _count == 0 { return 0 }
+        let clamped: Double = Swift.max(0.0, Swift.min(100.0, percentile))
+        let target: Double = (clamped / 100.0) * Double(_count)
+        let targetCount: UInt64 = UInt64(target.rounded(.up))
+        var cumulative: UInt64 = 0
+        for i in 0..<counts.count {
+            let c: UInt64 = counts[i]
+            if c == 0 { continue }
+            cumulative &+= c
+            if cumulative >= targetCount {
+                return layout.valueFor(i)
+            }
+        }
+        return _max
+    }
+
+    /// Alias for `valueAtPercentile(quantile * 100)`.
+    public func valueAtQuantile(_ quantile: Double) -> Int64 {
+        valueAtPercentile(quantile * 100.0)
+    }
+
+    /// Mean of all recorded values, weighted by their counts. Returns 0 for empty.
+    public var mean: Double {
+        if _count == 0 { return 0 }
+        var weightedSum: Double = 0
+        var n: Double = 0
+        for i in 0..<counts.count {
+            let c: UInt64 = counts[i]
+            if c == 0 { continue }
+            let v: Double = Double(layout.valueFor(i))
+            weightedSum += v * Double(c)
+            n += Double(c)
+        }
+        return weightedSum / n
+    }
+
+    /// Population standard deviation. Returns 0 for empty.
+    public var stdDeviation: Double {
+        if _count == 0 { return 0 }
+        let m: Double = mean
+        var sqSum: Double = 0
+        var n: Double = 0
+        for i in 0..<counts.count {
+            let c: UInt64 = counts[i]
+            if c == 0 { continue }
+            let v: Double = Double(layout.valueFor(i))
+            let d: Double = v - m
+            sqSum += (d * d) * Double(c)
+            n += Double(c)
+        }
+        let variance: Double = sqSum / n
+        return variance.squareRoot()
+    }
+}
